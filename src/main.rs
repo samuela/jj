@@ -71,7 +71,10 @@ fn ssh() -> std::io::Result<()> {
   if exit_status.success() {
     Ok(())
   } else {
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "ssh failed"))
+    Err(std::io::Error::new(
+      std::io::ErrorKind::Other,
+      "ssh exited with non-zero exit code",
+    ))
   }
 }
 
