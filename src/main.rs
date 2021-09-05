@@ -2,15 +2,83 @@ use rusoto_ec2::Ec2;
 use skim::prelude::Skim;
 use skim::prelude::SkimItemReader;
 use skim::prelude::SkimOptionsBuilder;
-use std::{
-  io::Cursor,
-  process::{exit, Command},
-};
+use std::io::Cursor;
+use std::process::exit;
+use std::process::Command;
+use std::str::FromStr;
+use std::time::Duration;
+use tokio::time::sleep;
 
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
-  let instance_id = std::env::var("JJ_INSTANCE_ID").expect("env var JJ_INSTANCE_ID not set");
+#[derive(Debug, PartialEq)]
+enum InstanceState {
+  Pending,
+  Running,
+  ShuttingDown,
+  Terminated,
+  Stopping,
+  Stopped,
+}
 
+impl FromStr for InstanceState {
+  type Err = ();
+
+  fn from_str(input: &str) -> Result<InstanceState, Self::Err> {
+    // See https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_InstanceState.html
+    match input {
+      "pending" => Ok(InstanceState::Pending),
+      "running" => Ok(InstanceState::Running),
+      "shutting-down" => Ok(InstanceState::ShuttingDown),
+      "terminated" => Ok(InstanceState::Terminated),
+      "stopping" => Ok(InstanceState::Stopping),
+      "stopped" => Ok(InstanceState::Stopped),
+      _ => Err(()),
+    }
+  }
+}
+
+async fn get_instance_state(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str) -> InstanceState {
+  InstanceState::from_str(
+    ec2client
+      .describe_instance_status(rusoto_ec2::DescribeInstanceStatusRequest {
+        include_all_instances: Some(true),
+        instance_ids: Some(vec![instance_id.to_string()]),
+        ..Default::default()
+      })
+      .await
+      .expect("borked calling describe_instance_status")
+      .instance_statuses
+      .expect("borked getting instance_statuses")[0]
+      .instance_state
+      .as_ref()
+      .expect("borked getting instance_state")
+      .name
+      .as_ref()
+      .expect("borked getting name"),
+  )
+  .expect("got illegal instance state value")
+}
+
+fn ssh() -> std::io::Result<()> {
+  eprintln!("🚀 waiting for an SSH connection...");
+  // See https://stackoverflow.com/questions/53477846/start-another-program-then-quit
+  // Note: hardcoding doodoo hostname for now...
+  let exit_status = Command::new("ssh")
+    .args(&["doodoo"])
+    .spawn()?
+    .wait()
+    .expect("ssh borked itself");
+
+  if exit_status.success() {
+    Ok(())
+  } else {
+    Err(std::io::Error::new(std::io::ErrorKind::Other, "ssh failed"))
+  }
+}
+
+async fn select_and_start_instance(
+  aws: &rusoto_ec2::Ec2Client,
+  instance_id: &str,
+) -> std::io::Result<()> {
   let options = SkimOptionsBuilder::default()
     // We already sort in the script that builds "instances.txt".
     .nosort(true)
@@ -40,10 +108,8 @@ async fn main() -> std::io::Result<()> {
     .0
     .to_string();
 
-  // Note: Hardcoding us-west-1 for now...
-  let aws = rusoto_ec2::Ec2Client::new(rusoto_signature::region::Region::UsWest1);
-
-  println!("⚜️ resizing instance...");
+  eprintln!("🍩 resizing instance...");
+  // TODO: check that instance is in stopped state first, can't resize otherwise.
   aws
     .modify_instance_attribute(rusoto_ec2::ModifyInstanceAttributeRequest {
       instance_id: instance_id.to_string(),
@@ -55,7 +121,7 @@ async fn main() -> std::io::Result<()> {
     .await
     .expect("could not resize instance");
 
-  println!("🏃 starting instance...");
+  eprintln!("🏃 starting instance...");
   aws
     .start_instances(rusoto_ec2::StartInstancesRequest {
       instance_ids: vec![instance_id.to_string()],
@@ -64,14 +130,39 @@ async fn main() -> std::io::Result<()> {
     .await
     .expect("could not start instance");
 
-  println!("🚀 waiting for an SSH connection...");
-  // See https://stackoverflow.com/questions/53477846/start-another-program-then-quit
-  // Note: hardcoding doodoo hostname for now...
-  Command::new("ssh")
-    .args(&["doodoo"])
-    .spawn()?
-    .wait()
-    .expect("ssh borked itself");
+  ssh()
+}
 
-  Ok(())
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+  // TODO:
+  //  * add `jj status` command. add --watch option?
+  //  * add `jj stop` command?
+  let instance_id = std::env::var("JJ_INSTANCE_ID").expect("env var JJ_INSTANCE_ID not set");
+
+  // Note: Hardcoding us-west-1 for now...
+  let aws = rusoto_ec2::Ec2Client::new(rusoto_signature::region::Region::UsWest1);
+
+  let instance_state = get_instance_state(&aws, &instance_id).await;
+  match instance_state {
+    InstanceState::Pending | InstanceState::Running => ssh(),
+    InstanceState::Stopped => select_and_start_instance(&aws, &instance_id).await,
+    InstanceState::Stopping | InstanceState::ShuttingDown => {
+      eprintln!("🛑 waiting for instance to finish shutting down...");
+      loop {
+        sleep(Duration::from_secs(5)).await;
+        if get_instance_state(&aws, &instance_id).await == InstanceState::Stopped {
+          break;
+        }
+      }
+      select_and_start_instance(&aws, &instance_id).await
+    }
+    _ => {
+      eprintln!(
+        "don't know what do with the current instance state: {:?}",
+        instance_state
+      );
+      exit(1);
+    }
+  }
 }
