@@ -58,12 +58,12 @@ async fn get_instance_state(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str
   .expect("got illegal instance state value")
 }
 
-fn ssh() -> std::io::Result<()> {
+fn ssh(hostname: &str) -> std::io::Result<()> {
   eprintln!("🚀 waiting for an SSH connection...");
   // See https://stackoverflow.com/questions/53477846/start-another-program-then-quit
   // Note: hardcoding doodoo hostname for now...
   let exit_status = Command::new("ssh")
-    .args(&["doodoo"])
+    .args(&[hostname.to_string()])
     .spawn()?
     .wait()
     .expect("ssh borked itself");
@@ -81,6 +81,7 @@ fn ssh() -> std::io::Result<()> {
 async fn select_and_start_instance(
   aws: &rusoto_ec2::Ec2Client,
   instance_id: &str,
+  hostname: &str,
 ) -> std::io::Result<()> {
   let options = SkimOptionsBuilder::default()
     // We already sort in the script that builds "instances.txt".
@@ -133,7 +134,7 @@ async fn select_and_start_instance(
     .await
     .expect("could not start instance");
 
-  ssh()
+  ssh(hostname)
 }
 
 #[tokio::main]
@@ -142,14 +143,15 @@ async fn main() -> std::io::Result<()> {
   //  * add `jj status` command. add --watch option?
   //  * add `jj stop` command?
   let instance_id = std::env::var("JJ_INSTANCE_ID").expect("env var JJ_INSTANCE_ID not set");
+  let hostname = std::env::var("JJ_HOSTNAME").expect("env var JJ_HOSTNAME not set");
 
   // Note: Hardcoding us-west-1 for now...
   let aws = rusoto_ec2::Ec2Client::new(rusoto_signature::region::Region::UsWest1);
 
   let instance_state = get_instance_state(&aws, &instance_id).await;
   match instance_state {
-    InstanceState::Pending | InstanceState::Running => ssh(),
-    InstanceState::Stopped => select_and_start_instance(&aws, &instance_id).await,
+    InstanceState::Pending | InstanceState::Running => ssh(&hostname),
+    InstanceState::Stopped => select_and_start_instance(&aws, &instance_id, &hostname).await,
     InstanceState::Stopping | InstanceState::ShuttingDown => {
       eprintln!("🛑 waiting for instance to finish shutting down...");
       loop {
@@ -158,7 +160,7 @@ async fn main() -> std::io::Result<()> {
           break;
         }
       }
-      select_and_start_instance(&aws, &instance_id).await
+      select_and_start_instance(&aws, &instance_id, &hostname).await
     }
     _ => {
       eprintln!(
