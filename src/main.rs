@@ -66,35 +66,39 @@ async fn get_instance_state(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str
 }
 
 #[async_recursion]
-async fn ssh(
-  ec2client: &rusoto_ec2::Ec2Client,
-  instance_id: &str,
-  hostname: &str,
-) -> std::io::Result<()> {
+async fn ssh(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str, hostname: &str) {
+  log("🚀 waiting for an SSH connection...");
+
   let cancel_token = CancellationToken::new();
 
   let _cancel_token = cancel_token.clone();
   let _hostname = hostname.to_string();
-  let ssh_rx = tokio::spawn(async move {
+  let ssh_ping = tokio::spawn(async move {
     loop {
-      log("🚀 waiting for an SSH connection...");
       // See https://stackoverflow.com/questions/53477846/start-another-program-then-quit
       // Note: hardcoding doodoo hostname for now...
+      // `kill_on_drop` is essential so that when we drop the ssh_ping task, eg.
+      // because cancel_rx completes first, any lingering ssh process is killed
+      // along with it.
       let mut cmd = Command::new("ssh")
-        .args(&[_hostname.to_string()])
+        .args(&[
+          String::from("-o"),
+          String::from("ConnectTimeout=1"),
+          _hostname.to_string(),
+          String::from("exit 0"),
+        ])
+        .kill_on_drop(true)
         .spawn()
         .expect("ssh command failed to start");
+
       select! {
-        exit_code = cmd.wait() => {
-          if exit_code.expect("failed to get exit code").success() {
-            log("ssh exited normally");
+        exit_status = cmd.wait() => {
+          if exit_status.expect("borked getting ssh exit status").success() {
             return ();
-          } else {
-            log("ssh exited with non-zero exit code");
           }
+          // couldn't connect, keep on loopin'
         }
         _ = _cancel_token.cancelled() => {
-          log("giving up on ssh");
           cmd.kill().await.expect("borked killing ssh");
           return ();
         }
@@ -124,27 +128,32 @@ async fn ssh(
   });
 
   select! {
-    _ = ssh_rx => Ok(()),
+    _ = ssh_ping => {
+      // We successfully SSH-pinged the instance; now connect for real.
+      Command::new("ssh")
+        .args(&[hostname.to_string()])
+        .spawn()
+        .expect("ssh command failed to start")
+        .wait()
+        .await
+        .expect("borked awaiting ssh");
+    },
     state = cancel_rx => {
       cancel_token.cancel();
       log(
         &format!("Instance state changed to {:?} while waiting for an SSH connection.
-  Press ENTER to resize and restart the instance.",
+  Press ENTER to restart the instance.",
         state.expect("borked getting cancel signal")
       ));
       let  stdin = std::io::stdin();
       let _ = stdin.read_line(&mut String::new()).expect("borked reading stdin");
-      wait_then_select_and_start_instance(ec2client, instance_id, hostname).await
+      wait_then_select_and_start_instance(ec2client, instance_id, hostname).await;
     }
   }
 }
 
 #[async_recursion]
-async fn select_and_start_instance(
-  aws: &rusoto_ec2::Ec2Client,
-  instance_id: &str,
-  hostname: &str,
-) -> std::io::Result<()> {
+async fn select_and_start_instance(aws: &rusoto_ec2::Ec2Client, instance_id: &str, hostname: &str) {
   let selected_type = {
     let options = SkimOptionsBuilder::default()
       // We already sort in the script that builds "instances.txt".
@@ -206,7 +215,7 @@ async fn wait_then_select_and_start_instance(
   aws: &rusoto_ec2::Ec2Client,
   instance_id: &str,
   hostname: &str,
-) -> std::io::Result<()> {
+) {
   log("🛑 waiting for instance to finish shutting down...");
   loop {
     sleep(Duration::from_secs(5)).await;
@@ -218,7 +227,7 @@ async fn wait_then_select_and_start_instance(
 }
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() {
   // TODO:
   //  * add `jj status` command. add --watch option?
   //  * add `jj stop` command?
