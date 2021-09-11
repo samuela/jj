@@ -81,12 +81,7 @@ async fn ssh(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str, hostname: &st
       // because cancel_rx completes first, any lingering ssh process is killed
       // along with it.
       let mut cmd = Command::new("ssh")
-        .args(&[
-          String::from("-o"),
-          String::from("ConnectTimeout=1"),
-          _hostname.to_string(),
-          String::from("exit 0"),
-        ])
+        .args(&[_hostname.to_string(), String::from("exit 0")])
         .kill_on_drop(true)
         .spawn()
         .expect("ssh command failed to start");
