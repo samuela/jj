@@ -1,13 +1,16 @@
+use async_recursion::async_recursion;
 use rusoto_ec2::Ec2;
 use skim::prelude::Skim;
 use skim::prelude::SkimItemReader;
 use skim::prelude::SkimOptionsBuilder;
 use std::io::Cursor;
 use std::process::exit;
-use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
+use tokio::process::Command;
+use tokio::select;
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, PartialEq)]
 enum InstanceState {
@@ -36,6 +39,10 @@ impl FromStr for InstanceState {
   }
 }
 
+fn log(message: &str) {
+  eprintln!("[jj] {}", message);
+}
+
 async fn get_instance_state(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str) -> InstanceState {
   InstanceState::from_str(
     ec2client
@@ -58,61 +65,118 @@ async fn get_instance_state(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str
   .expect("got illegal instance state value")
 }
 
-fn ssh(hostname: &str) -> std::io::Result<()> {
-  eprintln!("🚀 waiting for an SSH connection...");
-  // See https://stackoverflow.com/questions/53477846/start-another-program-then-quit
-  // Note: hardcoding doodoo hostname for now...
-  let exit_status = Command::new("ssh")
-    .args(&[hostname.to_string()])
-    .spawn()?
-    .wait()
-    .expect("ssh borked itself");
+#[async_recursion]
+async fn ssh(
+  ec2client: &rusoto_ec2::Ec2Client,
+  instance_id: &str,
+  hostname: &str,
+) -> std::io::Result<()> {
+  let cancel_token = CancellationToken::new();
 
-  if exit_status.success() {
-    Ok(())
-  } else {
-    Err(std::io::Error::new(
-      std::io::ErrorKind::Other,
-      "ssh exited with non-zero exit code",
-    ))
+  let _cancel_token = cancel_token.clone();
+  let _hostname = hostname.to_string();
+  let ssh_rx = tokio::spawn(async move {
+    loop {
+      log("🚀 waiting for an SSH connection...");
+      // See https://stackoverflow.com/questions/53477846/start-another-program-then-quit
+      // Note: hardcoding doodoo hostname for now...
+      let mut cmd = Command::new("ssh")
+        .args(&[_hostname.to_string()])
+        .spawn()
+        .expect("ssh command failed to start");
+      select! {
+        exit_code = cmd.wait() => {
+          if exit_code.expect("failed to get exit code").success() {
+            log("ssh exited normally");
+            return ();
+          } else {
+            log("ssh exited with non-zero exit code");
+          }
+        }
+        _ = _cancel_token.cancelled() => {
+          log("giving up on ssh");
+          cmd.kill().await.expect("borked killing ssh");
+          return ();
+        }
+      }
+    }
+  });
+
+  let _ec2client = ec2client.clone();
+  let _instance_id = instance_id.to_string();
+  let cancel_rx = tokio::spawn(async move {
+    // TODO should be a bounded loop?
+    loop {
+      let state = get_instance_state(&_ec2client, &_instance_id).await;
+      match state {
+        InstanceState::Pending | InstanceState::Running => {
+          // Keep waiting
+          sleep(Duration::from_secs(5)).await;
+        }
+        InstanceState::ShuttingDown
+        | InstanceState::Terminated
+        | InstanceState::Stopping
+        | InstanceState::Stopped => {
+          return state;
+        }
+      }
+    }
+  });
+
+  select! {
+    _ = ssh_rx => Ok(()),
+    state = cancel_rx => {
+      cancel_token.cancel();
+      log(
+        &format!("Instance state changed to {:?} while waiting for an SSH connection.
+  Press ENTER to resize and restart the instance.",
+        state.expect("borked getting cancel signal")
+      ));
+      let  stdin = std::io::stdin();
+      let _ = stdin.read_line(&mut String::new()).expect("borked reading stdin");
+      wait_then_select_and_start_instance(ec2client, instance_id, hostname).await
+    }
   }
 }
 
+#[async_recursion]
 async fn select_and_start_instance(
   aws: &rusoto_ec2::Ec2Client,
   instance_id: &str,
   hostname: &str,
 ) -> std::io::Result<()> {
-  let options = SkimOptionsBuilder::default()
-    // We already sort in the script that builds "instances.txt".
-    .nosort(true)
-    .exact(true)
-    .build()
-    .expect("borked building SkimOptions");
+  let selected_type = {
+    let options = SkimOptionsBuilder::default()
+      // We already sort in the script that builds "instances.txt".
+      .nosort(true)
+      .exact(true)
+      .build()
+      .expect("borked building SkimOptions");
 
-  let instance_types = include_str!("../instances.txt");
+    let instance_types = include_str!("../instances.txt");
 
-  let item_reader = SkimItemReader::default();
-  let items = item_reader.of_bufread(Cursor::new(instance_types));
-  let skim_output = Skim::run_with(&options, Some(items)).expect("borked getting skim_output");
-  if skim_output.is_abort {
-    eprintln!("Aborting...");
-    exit(1);
-  }
+    let item_reader = SkimItemReader::default();
+    let items = item_reader.of_bufread(Cursor::new(instance_types));
+    let skim_output = Skim::run_with(&options, Some(items)).expect("borked getting skim_output");
+    if skim_output.is_abort {
+      log("Aborting...");
+      exit(1);
+    }
 
-  let selected_items = skim_output.selected_items;
+    let selected_items = skim_output.selected_items;
 
-  // The skim library doesn't offer the cleanest interface here. It always
-  // returns a Vec even when multi-selection is off.
-  assert_eq!(selected_items.len(), 1);
-  let selected_type = selected_items[0]
-    .text()
-    .split_once(' ')
-    .expect("borked splitting selected line")
-    .0
-    .to_string();
+    // The skim library doesn't offer the cleanest interface here. It always
+    // returns a Vec even when multi-selection is off.
+    assert_eq!(selected_items.len(), 1);
+    selected_items[0]
+      .text()
+      .split_once(' ')
+      .expect("borked splitting selected line")
+      .0
+      .to_string()
+  };
 
-  eprintln!("🍩 resizing instance...");
+  log("🍩 resizing instance...");
   // TODO: check that instance is in stopped state first, can't resize otherwise.
   aws
     .modify_instance_attribute(rusoto_ec2::ModifyInstanceAttributeRequest {
@@ -125,7 +189,7 @@ async fn select_and_start_instance(
     .await
     .expect("could not resize instance");
 
-  eprintln!("🏃 starting instance...");
+  log("🏃 starting instance...");
   aws
     .start_instances(rusoto_ec2::StartInstancesRequest {
       instance_ids: vec![instance_id.to_string()],
@@ -134,7 +198,23 @@ async fn select_and_start_instance(
     .await
     .expect("could not start instance");
 
-  ssh(hostname)
+  ssh(&aws, &instance_id, hostname).await
+}
+
+#[async_recursion]
+async fn wait_then_select_and_start_instance(
+  aws: &rusoto_ec2::Ec2Client,
+  instance_id: &str,
+  hostname: &str,
+) -> std::io::Result<()> {
+  log("🛑 waiting for instance to finish shutting down...");
+  loop {
+    sleep(Duration::from_secs(5)).await;
+    if get_instance_state(&aws, &instance_id).await == InstanceState::Stopped {
+      break;
+    }
+  }
+  select_and_start_instance(&aws, &instance_id, &hostname).await
 }
 
 #[tokio::main]
@@ -150,23 +230,16 @@ async fn main() -> std::io::Result<()> {
 
   let instance_state = get_instance_state(&aws, &instance_id).await;
   match instance_state {
-    InstanceState::Pending | InstanceState::Running => ssh(&hostname),
+    InstanceState::Pending | InstanceState::Running => ssh(&aws, &instance_id, &hostname).await,
     InstanceState::Stopped => select_and_start_instance(&aws, &instance_id, &hostname).await,
     InstanceState::Stopping | InstanceState::ShuttingDown => {
-      eprintln!("🛑 waiting for instance to finish shutting down...");
-      loop {
-        sleep(Duration::from_secs(5)).await;
-        if get_instance_state(&aws, &instance_id).await == InstanceState::Stopped {
-          break;
-        }
-      }
-      select_and_start_instance(&aws, &instance_id, &hostname).await
+      wait_then_select_and_start_instance(&aws, &instance_id, &hostname).await
     }
     _ => {
-      eprintln!(
+      log(&format!(
         "don't know what do with the current instance state: {:?}",
-        instance_state
-      );
+        instance_state,
+      ));
       exit(1);
     }
   }
