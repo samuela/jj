@@ -4,18 +4,20 @@
 import requests
 import tabulate
 
+region = "us-west-2"
+
 data = requests.get("https://raw.githubusercontent.com/vantage-sh/ec2instances.info/master/www/instances.json").json()
 data = [
   (
-    x['instance_type'],
-    x['vCPU'],
-    x['clock_speed_ghz'],
-    x['memory'],
-    float(x['pricing']['us-west-1']['linux']['ondemand'])
+    x["instance_type"],
+    x["vCPU"],
+    x["clock_speed_ghz"],
+    x["memory"],
+    float(x["pricing"][region]["linux"]["ondemand"])
   )
   for x in data
   # Some instances aren't available in the region that I usually use.
-  if "us-west-1" in x["pricing"]
+  if region in x["pricing"]
 ]
 data = sorted(data, key=lambda y: f"{y[0].split('.')[0]} {y[4]}")
 data = [

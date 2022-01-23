@@ -171,7 +171,10 @@ async fn select_and_start_instance(aws: &rusoto_ec2::Ec2Client, instance_id: &st
 
     // The skim library doesn't offer the cleanest interface here. It always
     // returns a Vec even when multi-selection is off.
-    assert_eq!(selected_items.len(), 1);
+    if selected_items.len() != 1 {
+      log("No selection. Aborting...");
+      exit(1);
+    }
     selected_items[0]
       .text()
       .split_once(' ')
@@ -229,8 +232,8 @@ async fn main() {
   let instance_id = std::env::var("JJ_INSTANCE_ID").expect("env var JJ_INSTANCE_ID not set");
   let hostname = std::env::var("JJ_HOSTNAME").expect("env var JJ_HOSTNAME not set");
 
-  // Note: Hardcoding us-west-1 for now...
-  let aws = rusoto_ec2::Ec2Client::new(rusoto_signature::region::Region::UsWest1);
+  // Note: Hardcoding us-west-2 for now...
+  let aws = rusoto_ec2::Ec2Client::new(rusoto_signature::region::Region::UsWest2);
 
   let instance_state = get_instance_state(&aws, &instance_id).await;
   match instance_state {
