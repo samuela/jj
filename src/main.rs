@@ -43,6 +43,53 @@ fn log(message: &str) {
   eprintln!("[jj] {}", message);
 }
 
+async fn get_instances_text(region: &rusoto_signature::Region) -> String {
+  let xdg_dirs = xdg::BaseDirectories::with_prefix(env!("CARGO_PKG_NAME")).unwrap();
+  let cache_file_name = format!("{}-instances-table.txt", region.name());
+
+  // If we don't have the instances table cached for this region, download it.
+  // Can't use unwrap_or_else since it would require an async closure.
+  if xdg_dirs.find_cache_file(&cache_file_name).is_none() {
+    let p = xdg_dirs
+      .place_cache_file(&cache_file_name)
+      .expect("Could not create cache file");
+    log(&format!(
+      "Downloading instances table for {}...",
+      region.name()
+    ));
+
+    let resp = reqwest::get(format!(
+      "https://raw.githubusercontent.com/samuela/jj/main/scraping/data/{}-instances-table.txt",
+      region.name()
+    ))
+    .await
+    .expect("Requesting instances table failed");
+    assert!(
+      resp.status().is_success(),
+      "non-success status downloading instances table"
+    );
+
+    let mut out = std::fs::File::create(&p).expect("Could not File::create cache file");
+    std::io::copy(
+      &mut resp
+        .text()
+        .await
+        .expect("failed to open response as text")
+        .as_bytes(),
+      &mut out,
+    )
+    .expect("Failed downloading instances table");
+  }
+
+  // Read the cached instances table.
+  std::fs::read_to_string(
+    xdg_dirs
+      .find_cache_file(&cache_file_name)
+      .expect("Could not find cache file"),
+  )
+  .expect("Could not read instances table")
+}
+
 async fn get_instance_state(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str) -> InstanceState {
   InstanceState::from_str(
     ec2client
@@ -66,7 +113,12 @@ async fn get_instance_state(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str
 }
 
 #[async_recursion]
-async fn ssh(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str, hostname: &str) {
+async fn ssh(
+  ec2client: &rusoto_ec2::Ec2Client,
+  region: &rusoto_signature::Region,
+  instance_id: &str,
+  hostname: &str,
+) {
   log("🚀 waiting for an SSH connection...");
 
   let cancel_token = CancellationToken::new();
@@ -76,7 +128,6 @@ async fn ssh(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str, hostname: &st
   let ssh_ping = tokio::spawn(async move {
     loop {
       // See https://stackoverflow.com/questions/53477846/start-another-program-then-quit
-      // Note: hardcoding doodoo hostname for now...
       // `kill_on_drop` is essential so that when we drop the ssh_ping task, eg.
       // because cancel_rx completes first, any lingering ssh process is killed
       // along with it.
@@ -140,24 +191,29 @@ async fn ssh(ec2client: &rusoto_ec2::Ec2Client, instance_id: &str, hostname: &st
   Press ENTER to restart the instance.",
         state.expect("borked getting cancel signal")
       ));
-      let  stdin = std::io::stdin();
+      let stdin = std::io::stdin();
       let _ = stdin.read_line(&mut String::new()).expect("borked reading stdin");
-      wait_then_select_and_start_instance(ec2client, instance_id, hostname).await;
+      wait_then_select_and_start_instance(ec2client, region, instance_id, hostname).await;
     }
   }
 }
 
 #[async_recursion]
-async fn select_and_start_instance(aws: &rusoto_ec2::Ec2Client, instance_id: &str, hostname: &str) {
+async fn select_and_start_instance(
+  ec2client: &rusoto_ec2::Ec2Client,
+  region: &rusoto_signature::Region,
+  instance_id: &str,
+  hostname: &str,
+) {
   let selected_type = {
+    let instance_types = get_instances_text(&region).await;
+
     let options = SkimOptionsBuilder::default()
       // We already sort in the script that builds "instances.txt".
       .nosort(true)
       .exact(true)
       .build()
       .expect("borked building SkimOptions");
-
-    let instance_types = include_str!("../instances.txt");
 
     let item_reader = SkimItemReader::default();
     let items = item_reader.of_bufread(Cursor::new(instance_types));
@@ -185,7 +241,7 @@ async fn select_and_start_instance(aws: &rusoto_ec2::Ec2Client, instance_id: &st
 
   log("🍩 resizing instance...");
   // TODO: check that instance is in stopped state first, can't resize otherwise.
-  aws
+  ec2client
     .modify_instance_attribute(rusoto_ec2::ModifyInstanceAttributeRequest {
       instance_id: instance_id.to_string(),
       instance_type: Some(rusoto_ec2::AttributeValue {
@@ -197,7 +253,7 @@ async fn select_and_start_instance(aws: &rusoto_ec2::Ec2Client, instance_id: &st
     .expect("could not resize instance");
 
   log("🏃 starting instance...");
-  aws
+  ec2client
     .start_instances(rusoto_ec2::StartInstancesRequest {
       instance_ids: vec![instance_id.to_string()],
       ..rusoto_ec2::StartInstancesRequest::default()
@@ -205,23 +261,24 @@ async fn select_and_start_instance(aws: &rusoto_ec2::Ec2Client, instance_id: &st
     .await
     .expect("could not start instance");
 
-  ssh(&aws, &instance_id, hostname).await
+  ssh(&ec2client, &region, &instance_id, hostname).await
 }
 
 #[async_recursion]
 async fn wait_then_select_and_start_instance(
-  aws: &rusoto_ec2::Ec2Client,
+  ec2client: &rusoto_ec2::Ec2Client,
+  region: &rusoto_signature::Region,
   instance_id: &str,
   hostname: &str,
 ) {
   log("🛑 waiting for instance to finish shutting down...");
   loop {
     sleep(Duration::from_secs(5)).await;
-    if get_instance_state(&aws, &instance_id).await == InstanceState::Stopped {
+    if get_instance_state(&ec2client, &instance_id).await == InstanceState::Stopped {
       break;
     }
   }
-  select_and_start_instance(&aws, &instance_id, &hostname).await
+  select_and_start_instance(&ec2client, &region, &instance_id, &hostname).await
 }
 
 #[tokio::main]
@@ -231,16 +288,21 @@ async fn main() {
   //  * add `jj stop` command?
   let instance_id = std::env::var("JJ_INSTANCE_ID").expect("env var JJ_INSTANCE_ID not set");
   let hostname = std::env::var("JJ_HOSTNAME").expect("env var JJ_HOSTNAME not set");
+  let region_str = std::env::var("JJ_REGION").expect("env var JJ_REGION not set");
 
-  // Note: Hardcoding us-west-2 for now...
-  let aws = rusoto_ec2::Ec2Client::new(rusoto_signature::region::Region::UsWest2);
+  let region: rusoto_signature::region::Region = region_str.parse().expect("borked parsing region. See https://docs.rs/rusoto_signature/latest/src/rusoto_signature/region.rs.html#234-268 for possible variants.");
+  let ec2client = rusoto_ec2::Ec2Client::new(region.clone());
 
-  let instance_state = get_instance_state(&aws, &instance_id).await;
+  let instance_state = get_instance_state(&ec2client, &instance_id).await;
   match instance_state {
-    InstanceState::Pending | InstanceState::Running => ssh(&aws, &instance_id, &hostname).await,
-    InstanceState::Stopped => select_and_start_instance(&aws, &instance_id, &hostname).await,
+    InstanceState::Pending | InstanceState::Running => {
+      ssh(&ec2client, &region, &instance_id, &hostname).await
+    }
+    InstanceState::Stopped => {
+      select_and_start_instance(&ec2client, &region, &instance_id, &hostname).await
+    }
     InstanceState::Stopping | InstanceState::ShuttingDown => {
-      wait_then_select_and_start_instance(&aws, &instance_id, &hostname).await
+      wait_then_select_and_start_instance(&ec2client, &region, &instance_id, &hostname).await
     }
     _ => {
       log(&format!(
