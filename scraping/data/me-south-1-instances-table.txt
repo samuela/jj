@@ -1,0 +1,131 @@
+c5.large       2 vCPU   3 GHz    4.0Gb    $0.106/hr
+c5.xlarge      4 vCPU   3 GHz    8.0Gb    $0.211/hr
+c5.2xlarge     8 vCPU   3 GHz    16.0Gb   $0.422/hr
+c5.4xlarge     16 vCPU  3 GHz    32.0Gb   $0.845/hr
+c5.9xlarge     36 vCPU  3 GHz    72.0Gb   $1.901/hr
+c5.12xlarge    48 vCPU  3 GHz    96.0Gb   $2.534/hr
+c5.18xlarge    72 vCPU  3 GHz    144.0Gb  $3.802/hr
+c5.metal       96 vCPU  3 GHz    192.0Gb  $5.069/hr
+c5.24xlarge    96 vCPU  3 GHz    192.0Gb  $5.069/hr
+c5a.large      2 vCPU   2.8 GHz  4.0Gb    $0.095/hr
+c5a.xlarge     4 vCPU   2.8 GHz  8.0Gb    $0.19/hr
+c5a.2xlarge    8 vCPU   2.8 GHz  16.0Gb   $0.38/hr
+c5a.4xlarge    16 vCPU  2.8 GHz  32.0Gb   $0.76/hr
+c5a.8xlarge    32 vCPU  2.8 GHz  64.0Gb   $1.52/hr
+c5a.12xlarge   48 vCPU  2.8 GHz  96.0Gb   $2.28/hr
+c5a.16xlarge   64 vCPU  2.8 GHz  128.0Gb  $3.04/hr
+c5a.24xlarge   96 vCPU  2.8 GHz  192.0Gb  $4.56/hr
+c5ad.large     2 vCPU   2.8 GHz  4.0Gb    $0.108/hr
+c5ad.xlarge    4 vCPU   2.8 GHz  8.0Gb    $0.216/hr
+c5ad.2xlarge   8 vCPU   2.8 GHz  16.0Gb   $0.432/hr
+c5ad.4xlarge   16 vCPU  2.8 GHz  32.0Gb   $0.864/hr
+c5ad.8xlarge   32 vCPU  2.8 GHz  64.0Gb   $1.728/hr
+c5ad.12xlarge  48 vCPU  2.8 GHz  96.0Gb   $2.592/hr
+c5ad.16xlarge  64 vCPU  2.8 GHz  128.0Gb  $3.456/hr
+c5ad.24xlarge  96 vCPU  2.8 GHz  192.0Gb  $5.184/hr
+c5d.large      2 vCPU   3 GHz    4.0Gb    $0.12/hr
+c5d.xlarge     4 vCPU   3 GHz    8.0Gb    $0.24/hr
+c5d.2xlarge    8 vCPU   3 GHz    16.0Gb   $0.48/hr
+c5d.4xlarge    16 vCPU  3 GHz    32.0Gb   $0.959/hr
+c5d.9xlarge    36 vCPU  3 GHz    72.0Gb   $2.158/hr
+c5d.12xlarge   48 vCPU  3 GHz    96.0Gb   $2.878/hr
+c5d.18xlarge   72 vCPU  3 GHz    144.0Gb  $4.316/hr
+c5d.24xlarge   96 vCPU  3 GHz    192.0Gb  $5.755/hr
+c5d.metal      96 vCPU  3 GHz    192.0Gb  $5.755/hr
+c5n.large      2 vCPU   3 GHz    5.25Gb   $0.134/hr
+c5n.xlarge     4 vCPU   3 GHz    10.5Gb   $0.268/hr
+c5n.2xlarge    8 vCPU   3 GHz    21.0Gb   $0.536/hr
+c5n.4xlarge    16 vCPU  3 GHz    42.0Gb   $1.072/hr
+c5n.9xlarge    36 vCPU  3 GHz    96.0Gb   $2.412/hr
+c5n.18xlarge   72 vCPU  3 GHz    192.0Gb  $4.824/hr
+c5n.metal      72 vCPU  3 GHz    192.0Gb  $4.824/hr
+c6g.medium     1 vCPU   2.5 GHz  2.0Gb    $0.0425/hr
+c6g.large      2 vCPU   2.5 GHz  4.0Gb    $0.085/hr
+c6g.xlarge     4 vCPU   2.5 GHz  8.0Gb    $0.17/hr
+c6g.2xlarge    8 vCPU   2.5 GHz  16.0Gb   $0.34/hr
+c6g.4xlarge    16 vCPU  2.5 GHz  32.0Gb   $0.68/hr
+c6g.8xlarge    32 vCPU  2.5 GHz  64.0Gb   $1.36/hr
+c6g.12xlarge   48 vCPU  2.5 GHz  96.0Gb   $2.04/hr
+c6g.16xlarge   64 vCPU  2.5 GHz  128.0Gb  $2.72/hr
+c6g.metal      64 vCPU  2.5 GHz  128.0Gb  $2.72/hr
+d2.xlarge      4 vCPU   2.4 GHz  30.5Gb   $0.809/hr
+d2.2xlarge     8 vCPU   2.4 GHz  61.0Gb   $1.617/hr
+d2.4xlarge     16 vCPU  2.4 GHz  122.0Gb  $3.234/hr
+d2.8xlarge     36 vCPU  2.4 GHz  244.0Gb  $6.468/hr
+g4dn.xlarge    4 vCPU   2.5 GHz  16.0Gb   $0.645/hr
+g4dn.2xlarge   8 vCPU   2.5 GHz  32.0Gb   $0.922/hr
+g4dn.4xlarge   16 vCPU  2.5 GHz  64.0Gb   $1.477/hr
+g4dn.8xlarge   32 vCPU  2.5 GHz  128.0Gb  $2.669/hr
+g4dn.12xlarge  48 vCPU  2.5 GHz  192.0Gb  $4.798/hr
+g4dn.16xlarge  64 vCPU  2.5 GHz  256.0Gb  $5.338/hr
+g4dn.metal     96 vCPU  2.5 GHz  384.0Gb  $9.596/hr
+i3.large       2 vCPU   2.3 GHz  15.25Gb  $0.189/hr
+i3.xlarge      4 vCPU   2.3 GHz  30.5Gb   $0.378/hr
+i3.2xlarge     8 vCPU   2.3 GHz  61.0Gb   $0.757/hr
+i3.4xlarge     16 vCPU  2.3 GHz  122.0Gb  $1.514/hr
+i3.8xlarge     32 vCPU  2.3 GHz  244.0Gb  $3.027/hr
+i3.16xlarge    64 vCPU  2.3 GHz  488.0Gb  $6.054/hr
+i3en.large     2 vCPU   3.1 GHz  16.0Gb   $0.274/hr
+i3en.xlarge    4 vCPU   3.1 GHz  32.0Gb   $0.548/hr
+i3en.2xlarge   8 vCPU   3.1 GHz  64.0Gb   $1.095/hr
+i3en.3xlarge   12 vCPU  3.1 GHz  96.0Gb   $1.643/hr
+i3en.metal     96 vCPU  3.1 GHz  768.0Gb  $13.142/hr
+i3en.24xlarge  96 vCPU  3.1 GHz  768.0Gb  $13.142/hr
+i3en.6xlarge   24 vCPU  3.1 GHz  192.0Gb  $3.286/hr
+i3en.12xlarge  48 vCPU  3.1 GHz  384.0Gb  $6.571/hr
+inf1.xlarge    4 vCPU            8.0Gb    $0.28/hr
+inf1.2xlarge   8 vCPU            16.0Gb   $0.444/hr
+inf1.6xlarge   24 vCPU           48.0Gb   $1.447/hr
+inf1.24xlarge  96 vCPU           192.0Gb  $5.786/hr
+m5.large       2 vCPU   3.1 GHz  8.0Gb    $0.118/hr
+m5.xlarge      4 vCPU   3.1 GHz  16.0Gb   $0.235/hr
+m5.2xlarge     8 vCPU   3.1 GHz  32.0Gb   $0.471/hr
+m5.4xlarge     16 vCPU  3.1 GHz  64.0Gb   $0.942/hr
+m5.8xlarge     32 vCPU  3.1 GHz  128.0Gb  $1.883/hr
+m5.12xlarge    48 vCPU  3.1 GHz  192.0Gb  $2.825/hr
+m5.16xlarge    64 vCPU  3.1 GHz  256.0Gb  $3.766/hr
+m5.24xlarge    96 vCPU  3.1 GHz  384.0Gb  $5.65/hr
+m5.metal       96 vCPU  3.1 GHz  384.0Gb  $5.65/hr
+m5d.large      2 vCPU   3.1 GHz  8.0Gb    $0.139/hr
+m5d.xlarge     4 vCPU   3.1 GHz  16.0Gb   $0.277/hr
+m5d.2xlarge    8 vCPU   3.1 GHz  32.0Gb   $0.554/hr
+m5d.4xlarge    16 vCPU  3.1 GHz  64.0Gb   $1.109/hr
+m5d.8xlarge    32 vCPU  3.1 GHz  128.0Gb  $2.218/hr
+m5d.12xlarge   48 vCPU  3.1 GHz  192.0Gb  $3.326/hr
+m5d.16xlarge   64 vCPU  3.1 GHz  256.0Gb  $4.435/hr
+m5d.24xlarge   96 vCPU  3.1 GHz  384.0Gb  $6.653/hr
+m5d.metal      96 vCPU  3.1 GHz  384.0Gb  $6.653/hr
+m6g.medium     1 vCPU            4.0Gb    $0.047/hr
+m6g.large      2 vCPU            8.0Gb    $0.094/hr
+m6g.xlarge     4 vCPU            16.0Gb   $0.188/hr
+m6g.2xlarge    8 vCPU            32.0Gb   $0.376/hr
+m6g.4xlarge    16 vCPU           64.0Gb   $0.752/hr
+m6g.8xlarge    32 vCPU           128.0Gb  $1.504/hr
+m6g.12xlarge   48 vCPU           192.0Gb  $2.256/hr
+m6g.16xlarge   64 vCPU           256.0Gb  $3.008/hr
+m6g.metal      64 vCPU           256.0Gb  $3.008/hr
+r5.large       2 vCPU   3.1 GHz  16.0Gb   $0.155/hr
+r5.xlarge      4 vCPU   3.1 GHz  32.0Gb   $0.31/hr
+r5.2xlarge     8 vCPU   3.1 GHz  64.0Gb   $0.62/hr
+r5.4xlarge     16 vCPU  3.1 GHz  128.0Gb  $1.241/hr
+r5.8xlarge     32 vCPU  3.1 GHz  256.0Gb  $2.482/hr
+r5.12xlarge    48 vCPU  3.1 GHz  384.0Gb  $3.722/hr
+r5.16xlarge    64 vCPU  3.1 GHz  512.0Gb  $4.963/hr
+r5.metal       96 vCPU  3.1 GHz  768.0Gb  $7.445/hr
+r5.24xlarge    96 vCPU  3.1 GHz  768.0Gb  $7.445/hr
+r5d.large      2 vCPU   3.1 GHz  16.0Gb   $0.176/hr
+r5d.xlarge     4 vCPU   3.1 GHz  32.0Gb   $0.352/hr
+r5d.2xlarge    8 vCPU   3.1 GHz  64.0Gb   $0.704/hr
+r5d.4xlarge    16 vCPU  3.1 GHz  128.0Gb  $1.408/hr
+r5d.8xlarge    32 vCPU  3.1 GHz  256.0Gb  $2.816/hr
+r5d.12xlarge   48 vCPU  3.1 GHz  384.0Gb  $4.224/hr
+r5d.16xlarge   64 vCPU  3.1 GHz  512.0Gb  $5.632/hr
+r5d.24xlarge   96 vCPU  3.1 GHz  768.0Gb  $8.448/hr
+r5d.metal      96 vCPU  3.1 GHz  768.0Gb  $8.448/hr
+t3.nano        2 vCPU   3.1 GHz  0.5Gb    $0.0063/hr
+t3.micro       2 vCPU   3.1 GHz  1.0Gb    $0.0125/hr
+t3.small       2 vCPU   3.1 GHz  2.0Gb    $0.0251/hr
+t3.medium      2 vCPU   3.1 GHz  4.0Gb    $0.0502/hr
+t3.large       2 vCPU   3.1 GHz  8.0Gb    $0.1003/hr
+t3.xlarge      4 vCPU   3.1 GHz  16.0Gb   $0.2006/hr
+t3.2xlarge     8 vCPU   3.1 GHz  32.0Gb   $0.4013/hr
